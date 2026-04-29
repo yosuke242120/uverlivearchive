@@ -14,6 +14,7 @@ st.markdown("""
     h2, h3 { color: #00FFFF !important; border-bottom: 1px solid #333; }
     .stButton>button { background-color: #00FF00; color: black; font-weight: bold; border-radius: 20px; box-shadow: 0 0 5px #00FF00; }
     .unplayed-item { font-size: 0.9rem; color: #CCCCCC; }
+    .sort-box { background-color: #1E2127; padding: 10px; border-radius: 5px; margin-bottom: 10px; border: 1px solid #333; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -56,7 +57,7 @@ if check_password():
     with tab1:
         st.header("アルバム一覧")
         albums = get_cached_albums()
-        selected = st.selectbox("盤を選択", albums['Disc_Title'].tolist())
+        selected = st.selectbox("盤を選択", albums['Disc_Title'].tolist(), key="disc_select")
         if selected:
             st.dataframe(db.get_songs_by_album(selected), use_container_width=True)
         
@@ -77,10 +78,34 @@ if check_password():
             l_date = st.date_input("日付")
             l_title = st.text_input("ライブ名")
             songs_list = get_cached_all_song_names()
-            sel_songs = st.multiselect("セトリ選択", songs_list)
+            
+            # セトリ選択
+            sel_songs = st.multiselect("セトリ選択 (選んだ順に追加されます)", songs_list)
+            
+            # --- 修正依頼：曲順の微調整機能 ---
+            final_songs = list(sel_songs)
+            if len(sel_songs) >= 2:
+                with st.expander("🔄 曲順を入れ替える"):
+                    st.caption("現在選んでいる曲の順番を入れ替えられます")
+                    # 並び替え用のテキストエリア (カンマ区切りなどで編集させるのはミスの元なので、1曲ずつ入れ替え)
+                    for i in range(len(final_songs)):
+                        new_pos = st.number_input(f"{final_songs[i]} の位置", 1, len(final_songs), i+1, key=f"sort_{i}")
+                        # 実際のリストを更新（簡易的な入れ替えロジック）
+                        if new_pos != i + 1:
+                            item = final_songs.pop(i)
+                            final_songs.insert(new_pos - 1, item)
+                            st.rerun() # 順番が変わったら再描画
+            
+            # 最終的な確認表示
+            if final_songs:
+                st.markdown("---")
+                st.markdown("**保存される順番の確認:**")
+                for i, s in enumerate(final_songs):
+                    st.text(f"{i+1}. {s}")
+
             if st.button("🔥 歴史を保存"):
-                if l_title and sel_songs:
-                    db.add_live(str(l_date), l_title, sel_songs)
+                if l_title and final_songs:
+                    db.add_live(str(l_date), l_title, final_songs)
                     st.cache_data.clear()
                     st.success("保存完了！")
                     st.rerun()
@@ -91,7 +116,6 @@ if check_password():
             if not lives_df.empty and 'date' in lives_df.columns:
                 for _, row in lives_df.sort_values('date', ascending=False).iterrows():
                     with st.expander(f"📅 {row['date']} - {row['title']}"):
-                        # --- セトリ表示機能 ---
                         st.markdown("**🎼 SETLIST**")
                         current_setlist = db.get_setlist_by_live(row['date'], row['title'])
                         if current_setlist:
@@ -99,9 +123,7 @@ if check_password():
                                 st.write(f"{i+1}. {s}")
                         else:
                             st.write("セトリデータがありません")
-                        
                         st.divider()
-                        
                         if st.button("🗑️ ライブ記録を削除", key=f"del_{row['date']}_{row['title']}"):
                             db.delete_live(row['date'], row['title'])
                             st.cache_data.clear()
@@ -112,6 +134,7 @@ if check_password():
 
     with tab3:
         st.header("📈 統計レポート")
+        counts, _ = get_cached_stats()
         if not counts.empty:
             fig = px.bar(counts.head(20), x='song_name', y='count', color='count', 
                          color_continuous_scale='Viridis')
