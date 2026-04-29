@@ -3,8 +3,10 @@ import pandas as pd
 import plotly.express as px
 import database as db
 
+# 1. ページ設定
 st.set_page_config(page_title="UVERworld Live Archive", layout="wide")
 
+# 2. デザインカスタマイズ
 st.markdown("""
     <style>
     .stApp { background-color: #0E1117; color: #FFFFFF; }
@@ -15,6 +17,7 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
+# 3. データのキャッシュ
 @st.cache_data(ttl=3600)
 def get_cached_all_song_names(): return db.get_all_song_names()
 @st.cache_data(ttl=3600)
@@ -32,7 +35,6 @@ if not st.session_state.authenticated:
         st.session_state.authenticated = True
         st.rerun()
 else:
-    # 起動時のチェックをキャッシュ化して負荷軽減
     db.init_db()
     counts, all_songs_clean = get_cached_stats()
 
@@ -70,7 +72,6 @@ else:
             songs_list = get_cached_all_song_names()
             sel_songs = st.multiselect("セトリ選択", songs_list)
             
-            # 並び替えの状態保持
             if "sort_list" not in st.session_state or set(st.session_state.sort_list) != set(sel_songs):
                 st.session_state.sort_list = list(sel_songs)
 
@@ -112,9 +113,22 @@ else:
     with tab3:
         st.header("📈 統計レポート")
         if not counts.empty:
-            st.plotly_chart(px.bar(counts.head(20), x='song_name', y='count', color='count', color_continuous_scale='Viridis'), use_container_width=True)
-            st.dataframe(counts.head(30).rename(columns={'song_name': '曲名', 'count': '回数'}), use_container_width=True, hide_index=True)
+            # グラフは上位20曲に絞って見やすく
+            st.subheader("🔝 演奏回数 Top 20")
+            fig = px.bar(counts.head(20), x='song_name', y='count', color='count', 
+                         color_continuous_scale='Viridis', labels={'song_name': '曲名', 'count': '回数'})
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # 表は全データを表示（1回以上演奏されたものすべて）
+            st.subheader(f"📋 既履修曲リスト ({len(counts)} 曲)")
+            ranking_df = counts.copy().rename(columns={'song_name': '曲名', 'count': '演奏回数'})
+            # st.dataframe を使うことで、フィルタリングやソート、全表示が可能になる
+            st.dataframe(ranking_df, use_container_width=True, hide_index=True)
+            
             st.divider()
+            
+            # 未履修曲（0回）
+            st.subheader("😱 未履修曲")
             played_songs = counts['song_name'].tolist()
             unplayed = sorted([s for s in all_songs_clean['clean_name'].tolist() if s not in played_songs], key=str.lower)
             st.warning(f"残り {len(unplayed)} 曲！")
