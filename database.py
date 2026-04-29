@@ -103,3 +103,27 @@ def add_custom_song(album_title, song_name, disc_type='Album'):
     # スプシの「songs」シートの末尾に1行追加
     # CSVの並びに合わせて [Type, Disc_Title, Song_Name]
     s_sheet.append_row([disc_type, album_title, song_name])
+
+    def delete_live(date, title):
+    sh = get_spreadsheet()
+    l_sheet = sh.worksheet("lives")
+    set_sheet = sh.worksheet("setlists")
+    
+    # 1. livesシートから該当行を削除
+    lives_data = l_sheet.get_all_values()
+    for i, row in enumerate(lives_data):
+        # 日付とタイトルが一致する行を探す (1-indexedなので +1)
+        if row[0] == str(date) and row[1] == title:
+            l_sheet.delete_rows(i + 1)
+            break
+            
+    # 2. setlistsシートから該当する全行を削除
+    # 逆順でループしないと、削除した時にインデックスがズレるので注意
+    set_data = set_sheet.get_all_values()
+    rows_to_delete = []
+    for i, row in enumerate(set_data):
+        if row[0] == str(date) and row[1] == title:
+            rows_to_delete.append(i + 1)
+            
+    for row_idx in reversed(rows_to_delete):
+        set_sheet.delete_rows(row_idx)
