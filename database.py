@@ -69,9 +69,14 @@ def add_live(date, title, song_names):
 
 def get_lives():
     sh = get_spreadsheet()
-    rows = sh.worksheet("lives").get_all_values()
-    if len(rows) <= 1: return pd.DataFrame(columns=['date', 'title'])
-    return pd.DataFrame(rows[1:], columns=rows[0])
+    sheet = sh.worksheet("lives")
+    data = sheet.get_all_records()
+    
+    if not data:
+        # データが1件もない場合は、空のDataFrameを返す（エラー防止）
+        return pd.DataFrame(columns=['date', 'title'])
+        
+    return pd.DataFrame(data)
 
 def get_stats():
     sh = get_spreadsheet()
