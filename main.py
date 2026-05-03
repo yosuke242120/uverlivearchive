@@ -100,12 +100,18 @@ else:
             st.subheader("参戦履歴")
             lives_df = get_cached_lives()
             if not lives_df.empty:
-                for _, row in lives_df.sort_values('date', ascending=False).iterrows():
+                # 念のためインデックスをリセットして一意性を保証する
+                display_df = lives_df.sort_values('date', ascending=False).reset_index(drop=True)
+                for idx, row in display_df.iterrows():
+                    # 各ライブのセクション（ボタンIDにidxを混ぜて重複回避）
                     with st.expander(f"📅 {row['date']} - {row['title']}"):
                         current_setlist = db.get_setlist_by_live(row['date'], row['title'])
-                        for i, s in enumerate(current_setlist): st.write(f"{i+1}. {s}")
+                        if current_setlist:
+                            for i, s in enumerate(current_setlist): st.write(f"{i+1}. {s}")
+                        
                         st.divider()
-                        if st.button("🗑️ 削除", key=f"del_{row['date']}_{row['title']}"):
+                        # ここが修正ポイント：idxを追加して絶対に被らないキーにする
+                        if st.button("🗑️ 削除", key=f"del_{row['date']}_{row['title']}_{idx}"):
                             db.delete_live(row['date'], row['title'])
                             st.cache_data.clear()
                             st.rerun()
@@ -113,22 +119,9 @@ else:
     with tab3:
         st.header("📈 統計レポート")
         if not counts.empty:
-            # グラフは上位20曲に絞って見やすく
-            st.subheader("🔝 演奏回数 Top 20")
-            fig = px.bar(counts.head(20), x='song_name', y='count', color='count', 
-                         color_continuous_scale='Viridis', labels={'song_name': '曲名', 'count': '回数'})
-            st.plotly_chart(fig, use_container_width=True)
-            
-            # 表は全データを表示（1回以上演奏されたものすべて）
-            st.subheader(f"📋 既履修曲リスト ({len(counts)} 曲)")
-            ranking_df = counts.copy().rename(columns={'song_name': '曲名', 'count': '演奏回数'})
-            # st.dataframe を使うことで、フィルタリングやソート、全表示が可能になる
-            st.dataframe(ranking_df, use_container_width=True, hide_index=True)
-            
+            st.plotly_chart(px.bar(counts.head(20), x='song_name', y='count', color='count', color_continuous_scale='Viridis'), use_container_width=True)
+            st.dataframe(counts.rename(columns={'song_name': '曲名', 'count': '回数'}), use_container_width=True, hide_index=True)
             st.divider()
-            
-            # 未履修曲（0回）
-            st.subheader("😱 未履修曲")
             played_songs = counts['song_name'].tolist()
             unplayed = sorted([s for s in all_songs_clean['clean_name'].tolist() if s not in played_songs], key=str.lower)
             st.warning(f"残り {len(unplayed)} 曲！")
